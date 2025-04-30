@@ -1,0 +1,1 @@
+# Audio Transcription Service based on GigaAM-v2 

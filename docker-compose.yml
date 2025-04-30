@@ -1,0 +1,168 @@
+version: '3'
+
+services:
+  medical-doc-service:
+    build: 
+      context: ./services/medical_doc_service
+    ports:
+      - "${MEDICAL_DOC_SERVICE_PORT:-8000}:8000"
+    environment:
+      - RAG_SERVICE_URL=http://rag-doc-service:${RAG_SERVICE_PORT:-8001}
+      - LLM_SERVICE_URL=http://llm-service:${LLM_SERVICE_PORT:-8003}
+    volumes:
+      - ./services/medical_doc_service:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: ${HEALTHCHECK_INTERVAL:-30s}
+      timeout: ${HEALTHCHECK_TIMEOUT:-10s}
+      retries: ${HEALTHCHECK_RETRIES:-3}
+
+  # medical-doc-service:
+  #   build: 
+  #     context: ./services/medical_doc_service
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
+  #   volumes:
+  #     - ./services/medical_doc_service:/app
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+
+  rag-doc-service:
+    build:
+      context: ./services/rag_doc_service
+    ports:
+      - "${RAG_SERVICE_PORT:-8001}:8001"
+    environment:
+      - MODEL_PATH=${RAG_MODEL_PATH:-/app/models/all-MiniLM-L6-v2}
+    volumes:
+      - ./services/rag_doc_service:/app
+      - ./services/rag_doc_service/models:/app/models
+      - rag_embeddings:/app/data/embeddings
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: ${HEALTHCHECK_INTERVAL:-30s}
+      timeout: ${HEALTHCHECK_TIMEOUT:-10s}
+      retries: ${HEALTHCHECK_RETRIES:-3}
+
+  llm-service:
+    build:
+      context: ./services/llm_service
+    ports:
+      - "${LLM_SERVICE_PORT:-8003}:8003"
+
+    # environment:
+    #   - OPENAI_API_KEY=${OPENAI_API_KEY}
+    #   - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4-turbo-preview}
+    #   - OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS:-4000}
+    #   - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.7}
+    #   - LOCAL_MODEL_PATH=${LOCAL_MODEL_PATH:-models/local_model}
+    #   - LOCAL_MODEL_HOST=${LOCAL_MODEL_HOST:-host.docker.internal}
+    #   - LOCAL_MODEL_PORT=${LOCAL_MODEL_PORT:-1234}
+    #   - LM_STUDIO_URL=http://${LOCAL_MODEL_HOST}:${LOCAL_MODEL_PORT}/v1
+    #   - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+    #   - DEEPSEEK_API_BASE=${DEEPSEEK_API_BASE}
+    #   - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
+    #   - DEEPSEEK_MAX_TOKENS=${DEEPSEEK_MAX_TOKENS:-4000}
+    #   - DEEPSEEK_TEMPERATURE=${DEEPSEEK_TEMPERATURE:-0.7}
+    #   - GIGACHAT_CREDENTIALS=${GIGACHAT_CREDENTIALS}
+    #   - GIGACHAT_SCOPE=${GIGACHAT_SCOPE:-GIGACHAT_API_PERS}
+    #   - GIGACHAT_MODEL=${GIGACHAT_MODEL:-GigaChat-2-Max}
+    #   - GIGACHAT_MAX_TOKENS=${GIGACHAT_MAX_TOKENS:-4000}
+    #   - GIGACHAT_TEMPERATURE=${GIGACHAT_TEMPERATURE:-0.7}
+    env_file:
+      - .env
+    extra_hosts:
+      - "${LOCAL_MODEL_HOST:-host.docker.internal}:host-gateway"
+    volumes:
+      - ./services/llm_service:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: ${HEALTHCHECK_INTERVAL:-30s}
+      timeout: ${HEALTHCHECK_TIMEOUT:-10s}
+      retries: ${HEALTHCHECK_RETRIES:-3}
+
+  audio-transcription-service:
+    build: ./services/audio_transcription_service
+    ports:
+      - "${AUDIO_SERVICE_PORT:-8004}:8004"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HF_TOKEN=${HF_TOKEN}
+      - WHISPER_MODEL=${WHISPER_MODEL:-large-v3}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: ${HEALTHCHECK_INTERVAL:-30s}
+      timeout: ${HEALTHCHECK_TIMEOUT:-10s}
+      retries: ${HEALTHCHECK_RETRIES:-3}
+
+  # recommendation-service:
+  #   build:
+  #     context: .
+  #     dockerfile: ./services/recommendation_service/Dockerfile
+  #   ports:
+  #     - "8002:8002"
+  #   environment:
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
+  #     - RAG_SERVICE_URL=http://rag-doc-service:8001
+  #   volumes:
+  #     - ./services/recommendation_service:/app
+  #     - ./modules:/app/modules
+  #   depends_on:
+  #     - rag-doc-service
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "${STREAMLIT_PORT:-8501}:8501"
+    environment:
+      - RAG_SERVICE_URL=http://rag-doc-service:${RAG_SERVICE_PORT:-8001}
+      - LLM_SERVICE_URL=http://llm-service:${LLM_SERVICE_PORT:-8003}
+      - MEDICAL_DOC_SERVICE_URL=http://medical-doc-service:${MEDICAL_DOC_SERVICE_PORT:-8000}
+      - AUDIO_TRANSCRIPTION_SERVICE_URL=http://audio-transcription-service:${AUDIO_SERVICE_PORT:-8004}
+    volumes:
+      - ./frontend:/app
+    depends_on:
+      - rag-doc-service
+      - llm-service
+      - medical-doc-service
+      - audio-transcription-service
+      # - recommendation-service 
+
+  integrated-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.integrated
+    ports:
+      - "${INTEGRATED_STREAMLIT_PORT:-8502}:8502"
+    environment:
+      - MEDICAL_DOC_SERVICE_URL=http://medical-doc-service:${MEDICAL_DOC_SERVICE_PORT:-8000}
+      - AUDIO_TRANSCRIPTION_SERVICE_URL=http://audio-transcription-service:${AUDIO_SERVICE_PORT:-8004}
+      - LLM_SERVICE_URL=http://llm-service:${LLM_SERVICE_PORT:-8003}
+      - SELECTED_MODEL=${SELECTED_MODEL:-gpt-4-turbo-preview}
+      - ENABLE_MODEL_SELECTION=${ENABLE_MODEL_SELECTION:-false}
+    volumes:
+      - ./frontend:/app
+    depends_on:
+      - medical-doc-service
+      - audio-transcription-service
+      - llm-service
+    command: streamlit run integrated_app.py --server.port 8502
+
+volumes:
+  rag_embeddings:
+    name: rag_embeddings
+  audio_uploads:
+    name: audio_uploads 
