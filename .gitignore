@@ -1,0 +1,12 @@
+dist/
+build/
+data/
+.env
+generated
+*__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.pywz
