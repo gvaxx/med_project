@@ -172,7 +172,7 @@ def transcribe_audio(audio_file, model_type="rnnt", long_form=False):
                 "model_type": model_type, 
                 "long_form": "true" if long_form else "false"
             },
-            timeout=300  # Увеличиваем timeout до 5 минут для длинных аудио
+            timeout=600  # Увеличиваем timeout до 10 минут для длинных аудио
         )
         
         # Проверяем статус ответа

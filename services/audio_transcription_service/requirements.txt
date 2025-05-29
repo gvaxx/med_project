@@ -6,4 +6,7 @@ torchaudio==2.1.0
 numpy==1.26.3
 pydantic==2.5.3
 python-dotenv==1.0.0
-ffmpeg-python==0.2.0 
+ffmpeg-python==0.2.0
+whisperx
+faster-whisper
+pyannote.audio

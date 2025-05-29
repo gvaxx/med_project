@@ -9,6 +9,8 @@ from pydantic import BaseModel
 from typing import Optional, Dict, List, Any
 import uuid
 import gigaam
+import whisperx
+import torch
 from pathlib import Path
 import datetime
 
@@ -32,86 +34,108 @@ app.add_middleware(
 UPLOAD_DIR = Path("/app/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-# Initialize GigaAM models
+# Initialize models
 try:
-    logger.info("Initializing GigaAM models...")
+    logger.info("Initializing models...")
     
-    # Проверка наличия зависимостей для longform транскрипции
+    # Initialize GigaAM models
     try:
-        import importlib
-        longform_deps = ["pyannote.audio"]
-        missing_deps = []
+        logger.info("Initializing GigaAM models...")
         
-        for dep in longform_deps:
-            try:
-                importlib.import_module(dep)
-            except ImportError:
-                missing_deps.append(dep)
-        
-        if missing_deps:
-            logger.warning(f"Missing longform dependencies: {', '.join(missing_deps)}")
-            logger.warning("Long-form transcription may not work properly")
-        else:
-            logger.info("All longform dependencies are available")
-    except Exception as e:
-        logger.warning(f"Error checking longform dependencies: {str(e)}")
-    
-    # Based on the GigaAM documentation, v2_rnnt is the best model with lowest WER
-    # Available model names: "v2_ctc" or "ctc", "v2_rnnt" or "rnnt", "v1_ctc", "v1_rnnt"
-    
-    # First try to load the best models (v2)
-    try:
-        logger.info("Attempting to load GigaAM-v2 RNNT model (best performance)")
-        rnnt_model = gigaam.load_model("v2_rnnt")
-        logger.info("Successfully loaded GigaAM-v2 RNNT model")
-    except Exception as e:
-        logger.warning(f"Failed to load v2_rnnt model: {str(e)}. Falling back to default RNNT model.")
+        # Проверка наличия зависимостей для longform транскрипции
         try:
-            rnnt_model = gigaam.load_model("rnnt")
-            logger.info("Successfully loaded default RNNT model")
-        except Exception as e2:
-            logger.warning(f"Failed to load default RNNT model: {str(e2)}. Trying v1_rnnt.")
-            try:
-                rnnt_model = gigaam.load_model("v1_rnnt")
-                logger.info("Successfully loaded GigaAM-v1 RNNT model")
-            except Exception as e3:
-                logger.error(f"Failed to load any RNNT model: {str(e3)}")
-                rnnt_model = None
-    
-    # Load CTC model as fallback
-    try:
-        logger.info("Attempting to load GigaAM-v2 CTC model")
-        ctc_model = gigaam.load_model("v2_ctc")
-        logger.info("Successfully loaded GigaAM-v2 CTC model")
-    except Exception as e:
-        logger.warning(f"Failed to load v2_ctc model: {str(e)}. Falling back to default CTC model.")
-        try:
-            ctc_model = gigaam.load_model("ctc")
-            logger.info("Successfully loaded default CTC model")
-        except Exception as e2:
-            logger.warning(f"Failed to load default CTC model: {str(e2)}. Trying v1_ctc.")
-            try:
-                ctc_model = gigaam.load_model("v1_ctc")
-                logger.info("Successfully loaded GigaAM-v1 CTC model")
-            except Exception as e3:
-                logger.error(f"Failed to load any CTC model: {str(e3)}")
-                ctc_model = None
-    
-    # Log which models were successfully loaded
-    if rnnt_model is not None:
-        logger.info("RNNT model is available")
-    if ctc_model is not None:
-        logger.info("CTC model is available")
-    if rnnt_model is None and ctc_model is None:
-        logger.error("Failed to load any GigaAM models")
+            import importlib
+            longform_deps = ["pyannote.audio"]
+            missing_deps = []
+            
+            for dep in longform_deps:
+                try:
+                    importlib.import_module(dep)
+                except ImportError:
+                    missing_deps.append(dep)
+            
+            if missing_deps:
+                logger.warning(f"Missing longform dependencies: {', '.join(missing_deps)}")
+                logger.warning("Long-form transcription may not work properly")
+            else:
+                logger.info("All longform dependencies are available")
+        except Exception as e:
+            logger.warning(f"Error checking longform dependencies: {str(e)}")
         
+        # Based on the GigaAM documentation, v2_rnnt is the best model with lowest WER
+        # Available model names: "v2_ctc" or "ctc", "v2_rnnt" or "rnnt", "v1_ctc", "v1_rnnt"
+        
+        # First try to load the best models (v2)
+        try:
+            logger.info("Attempting to load GigaAM-v2 RNNT model (best performance)")
+            rnnt_model = gigaam.load_model("v2_rnnt")
+            logger.info("Successfully loaded GigaAM-v2 RNNT model")
+        except Exception as e:
+            logger.warning(f"Failed to load v2_rnnt model: {str(e)}. Falling back to default RNNT model.")
+            try:
+                rnnt_model = gigaam.load_model("rnnt")
+                logger.info("Successfully loaded default RNNT model")
+            except Exception as e2:
+                logger.warning(f"Failed to load default RNNT model: {str(e2)}. Trying v1_rnnt.")
+                try:
+                    rnnt_model = gigaam.load_model("v1_rnnt")
+                    logger.info("Successfully loaded GigaAM-v1 RNNT model")
+                except Exception as e3:
+                    logger.error(f"Failed to load any RNNT model: {str(e3)}")
+                    rnnt_model = None
+        
+        # Load CTC model as fallback
+        try:
+            logger.info("Attempting to load GigaAM-v2 CTC model")
+            ctc_model = gigaam.load_model("v2_ctc")
+            logger.info("Successfully loaded GigaAM-v2 CTC model")
+        except Exception as e:
+            logger.warning(f"Failed to load v2_ctc model: {str(e)}. Falling back to default CTC model.")
+            try:
+                ctc_model = gigaam.load_model("ctc")
+                logger.info("Successfully loaded default CTC model")
+            except Exception as e2:
+                logger.warning(f"Failed to load default CTC model: {str(e2)}. Trying v1_ctc.")
+                try:
+                    ctc_model = gigaam.load_model("v1_ctc")
+                    logger.info("Successfully loaded GigaAM-v1 CTC model")
+                except Exception as e3:
+                    logger.error(f"Failed to load any CTC model: {str(e3)}")
+                    ctc_model = None
+        
+        # Log which models were successfully loaded
+        if rnnt_model is not None:
+            logger.info("RNNT model is available")
+        if ctc_model is not None:
+            logger.info("CTC model is available")
+        if rnnt_model is None and ctc_model is None:
+            logger.error("Failed to load any GigaAM models")
+        
+    except Exception as e:
+        logger.error(f"Error during GigaAM model initialization: {str(e)}")
+        ctc_model = None
+        rnnt_model = None
+
+    # Initialize WhisperX model
+    try:
+        # logger.info("Initializing WhisperX model...")
+        # device = "cuda" if torch.cuda.is_available() else "cpu"
+        # compute_type = "float16" if device == "cuda" else "int8"
+        # whisperx_model = whisperx.load_model("large-v3", device, compute_type=compute_type)
+        # logger.info("Successfully loaded WhisperX model")
+        whisperx_model = None
+    except Exception as e:
+        logger.error(f"Error during WhisperX model initialization: {str(e)}")
+        whisperx_model = None
+
 except Exception as e:
-    logger.error(f"Error during GigaAM model initialization: {str(e)}")
+    logger.error(f"Error during model initialization: {str(e)}")
     ctc_model = None
     rnnt_model = None
+    whisperx_model = None
 
 class TranscriptionRequest(BaseModel):
-    model_type: str = "rnnt"  # "ctc" or "rnnt"
+    model_type: str = "rnnt"  # "ctc", "rnnt", or "whisperx"
     long_form: bool = False
 
 class TranscriptionResponse(BaseModel):
@@ -151,7 +175,8 @@ async def health_check():
 async def get_available_models():
     models = {
         "ctc": ctc_model is not None,
-        "rnnt": rnnt_model is not None
+        "rnnt": rnnt_model is not None,
+        "whisperx": whisperx_model is not None
     }
     return models
 
@@ -180,22 +205,25 @@ async def transcribe_audio(
     model_type: str = Form("rnnt"),
     long_form: str = Form("false")
 ):
-    """Simplified endpoint that takes form data directly"""
+    """Transcribe audio using specified model"""
     logger.info(f"Received request with model_type={model_type}, long_form={long_form}")
-    logger.info(f"File: {file.filename}, Content-Type: {file.content_type}")
-    logger.info(f"long_form: {long_form}")
+    
     # Convert long_form to boolean
     use_long_form = long_form.lower() == "true"
-    logger.info(f"use_long_form: {use_long_form}")
+    
     # Validate model type
-    if model_type not in ["ctc", "rnnt"]:
+    if model_type not in ["ctc", "rnnt", "whisperx"]:
         return JSONResponse(
             status_code=400,
-            content={"error": f"Invalid model_type: {model_type}. Must be 'ctc' or 'rnnt'"}
+            content={"error": f"Invalid model_type: {model_type}. Must be 'ctc', 'rnnt', or 'whisperx'"}
         )
     
     # Get model
-    model = ctc_model if model_type == "ctc" else rnnt_model
+    if model_type == "whisperx":
+        model = whisperx_model
+    else:
+        model = ctc_model if model_type == "ctc" else rnnt_model
+    
     if model is None:
         return JSONResponse(
             status_code=500,
@@ -225,30 +253,35 @@ async def transcribe_audio(
         
         logger.info(f"Saved file to {temp_file_path}")
         
-        # Process based on long_form
-        if not use_long_form:
-            # Short audio transcription
-            process_short_audio = True
-        else:
-            # Try long-form transcription first
-            process_short_audio = False
-            
+        # Process based on model type
+        if model_type == "whisperx":
             # Set Hugging Face token if available
             hf_token = os.environ.get("HF_TOKEN")
             if hf_token:
                 os.environ["HUGGING_FACE_HUB_TOKEN"] = hf_token
-                logger.info("Using HF_TOKEN for longform transcription")
+                logger.info("Using HF_TOKEN for WhisperX transcription")
             
-            try:
-                utterances = model.transcribe_longform(temp_file_path)
-                transcription = " ".join([u["transcription"] for u in utterances])
+            # Load audio
+            audio = whisperx.load_audio(temp_file_path)
+            
+            # Transcribe with WhisperX
+            result = model.transcribe(audio, batch_size=16)
+            
+            # Align whisper output
+            model_a, metadata = whisperx.load_align_model(language_code=result["language"], device=device)
+            result = whisperx.align(result["segments"], model_a, metadata, audio, device)
+            
+            # Format response
+            transcription = " ".join([seg["text"] for seg in result["segments"]])
+            
+            if use_long_form:
                 return {
                     "utterances": [
                         {
-                            "transcription": u["transcription"],
-                            "boundaries": u["boundaries"]
+                            "transcription": seg["text"],
+                            "boundaries": [seg["start"], seg["end"]]
                         }
-                        for u in utterances
+                        for seg in result["segments"]
                     ],
                     "transcription": transcription,
                     "model_type": model_type,
@@ -258,25 +291,69 @@ async def transcribe_audio(
                         "content_type": file.content_type
                     }
                 }
-            except Exception as e:
-                logger.error(f"Long-form transcription error: {str(e)}")
-                logger.info("Falling back to regular transcription")
-                # Fallback to short audio transcription
-                process_short_audio = True
-        
-        # Process short audio if needed
-        if process_short_audio:
-            transcription = model.transcribe(temp_file_path)
-            
-            return {
-                "transcription": transcription,
-                "model_type": model_type,
-                "file_info": {
-                    "filename": file.filename,
-                    "size": len(file_content),
-                    "content_type": file.content_type
+            else:
+                return {
+                    "transcription": transcription,
+                    "model_type": model_type,
+                    "file_info": {
+                        "filename": file.filename,
+                        "size": len(file_content),
+                        "content_type": file.content_type
+                    }
                 }
-            }
+        else:
+            # Process with GigaAM models
+            if not use_long_form:
+                transcription = model.transcribe(temp_file_path)
+                return {
+                    "transcription": transcription,
+                    "model_type": model_type,
+                    "file_info": {
+                        "filename": file.filename,
+                        "size": len(file_content),
+                        "content_type": file.content_type
+                    }
+                }
+            else:
+                # Try long-form transcription
+                try:
+                    # Set Hugging Face token if available
+                    hf_token = os.environ.get("HF_TOKEN")
+                    if hf_token:
+                        os.environ["HUGGING_FACE_HUB_TOKEN"] = hf_token
+                        logger.info("Using HF_TOKEN for longform transcription")
+                    
+                    utterances = model.transcribe_longform(temp_file_path)
+                    transcription = " ".join([u["transcription"] for u in utterances])
+                    return {
+                        "utterances": [
+                            {
+                                "transcription": u["transcription"],
+                                "boundaries": u["boundaries"]
+                            }
+                            for u in utterances
+                        ],
+                        "transcription": transcription,
+                        "model_type": model_type,
+                        "file_info": {
+                            "filename": file.filename,
+                            "size": len(file_content),
+                            "content_type": file.content_type
+                        }
+                    }
+                except Exception as e:
+                    logger.error(f"Long-form transcription error: {str(e)}")
+                    logger.info("Falling back to regular transcription")
+                    transcription = model.transcribe(temp_file_path)
+                    return {
+                        "transcription": transcription,
+                        "model_type": model_type,
+                        "file_info": {
+                            "filename": file.filename,
+                            "size": len(file_content),
+                            "content_type": file.content_type
+                        }
+                    }
             
     except Exception as e:
         logger.error(f"Error processing file: {str(e)}")

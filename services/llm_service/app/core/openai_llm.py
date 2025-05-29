@@ -5,7 +5,8 @@ from .llm_base import LLMBase
 class OpenAILLM(LLMBase):
     """OpenAI LLM implementation."""
     
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini-2024-07-18"):
+    # def __init__(self, api_key: str, model: str = "gpt-4o-mini-2024-07-18"):
+    def __init__(self, api_key: str, model: str = "gpt-4o-2024-11-20"):
         self.client = openai.AsyncOpenAI(
             api_key=api_key,
             http_client=None  # Let OpenAI handle the HTTP client configuration

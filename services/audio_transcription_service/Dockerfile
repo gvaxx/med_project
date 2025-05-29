@@ -2,17 +2,16 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Install git and ffmpeg
+# Install system dependencies
 RUN apt-get update && \
     apt-get install -y git ffmpeg curl && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy basic requirements (except gigaam)
+# Copy requirements
 COPY requirements.txt .
 
-
-# Установка остальных зависимостей
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Clone and install GigaAM with longform dependencies
@@ -30,4 +29,4 @@ RUN mkdir -p /app/uploads
 
 EXPOSE 8004
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8004"] 
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8004", "--timeout-keep-alive", "600", "--timeout-graceful-shutdown", "300"] 

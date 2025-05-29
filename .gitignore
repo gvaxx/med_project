@@ -1,6 +1,6 @@
 dist/
 build/
-data/
+*data/
 .env
 generated
 *__pycache__/
